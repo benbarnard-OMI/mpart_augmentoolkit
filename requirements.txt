@@ -1,0 +1,8 @@
+docling>=0.0.14
+vllm>=0.5.0
+ollama
+pdfminer.six
+pypdf
+python-dotenv
+loguru
+rich
