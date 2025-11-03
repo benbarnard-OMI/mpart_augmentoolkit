@@ -2,6 +2,9 @@
 # Validation script for Augmentoolkit container setup
 # Run this before deploying to ensure everything is configured correctly
 
+# Enable safer bash mode
+set -u
+
 echo "=========================================="
 echo "Augmentoolkit Container Validation"
 echo "=========================================="

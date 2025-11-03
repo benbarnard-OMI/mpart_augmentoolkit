@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=augmentoolkit-qa
-#SBATCH --account=REPLACE_WITH_YOUR_ACCOUNT
+#SBATCH --account=REPLACE_WITH_YOUR_ACCOUNT  # REQUIRED: Replace with your ICC account name
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32G
@@ -10,6 +10,11 @@
 
 # Example SLURM batch script for running Augmentoolkit on UIUC Campus Cluster
 # This script demonstrates basic QA generation from input documents
+#
+# IMPORTANT: Before submitting this job:
+# 1. Replace REPLACE_WITH_YOUR_ACCOUNT above with your actual ICC account
+# 2. Set your API_KEY below or export it from an environment file
+# 3. Ensure your input data is in ~/augmentoolkit_data/inputs/
 
 echo "=========================================="
 echo "Augmentoolkit QA Generation Job"
@@ -17,6 +22,12 @@ echo "Job ID: ${SLURM_JOB_ID}"
 echo "Running on: $(hostname)"
 echo "Started at: $(date)"
 echo "=========================================="
+
+# Validate required settings
+if [[ "${SLURM_JOB_ACCOUNT}" == *"REPLACE"* ]]; then
+    echo "ERROR: You must set a valid account name in the SBATCH --account directive"
+    exit 1
+fi
 
 # Load required modules
 module load apptainer
@@ -38,7 +49,20 @@ mkdir -p "${DATA_DIR}/cache"
 mkdir -p "${DATA_DIR}/configs"
 
 # Set environment variables for configuration
-export API_KEY="REPLACE_WITH_YOUR_API_KEY"
+# SECURITY: Set API_KEY via environment or secure config file instead of hardcoding
+# Option 1: Export before submitting: export API_KEY="your-key"; sbatch script.slurm
+# Option 2: Load from secure file: source ~/secure/api_keys.sh
+# Option 3: Replace the placeholder below (LEAST SECURE)
+export API_KEY="${API_KEY:-REPLACE_WITH_YOUR_API_KEY}"
+
+if [[ "${API_KEY}" == *"REPLACE"* ]]; then
+    echo "ERROR: You must set a valid API_KEY"
+    echo "Options:"
+    echo "  1. Export before submitting: export API_KEY='your-key'; sbatch $0"
+    echo "  2. Edit this script and replace REPLACE_WITH_YOUR_API_KEY"
+    exit 1
+fi
+
 export INPUT_DIR=/data/inputs
 export OUTPUT_DIR=/data/outputs
 
