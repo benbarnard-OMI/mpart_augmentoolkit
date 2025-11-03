@@ -1,0 +1,193 @@
+pipeline: factual-datagen-pipeline
+
+# High-quality configuration for maximum QA pair quality and diversity
+# Optimized for quality over speed
+# Best for: Creating training datasets, fine-tuning data, high-value content
+
+no_flatten:
+  - factual_sft
+  - template_kwargs
+  - generic_dataset_paths
+  - generic_dataset_percentages
+  - other_pretrain_kwargs
+  - other_finetune_kwargs
+  - input_dirs
+
+model_auto_train:
+  do_train: False
+  runpod_api_key: 
+  huggingface_token: 
+  wandb_api_key: 
+  pod_id: 
+
+model_auto_run:
+  do_run: False
+  cache_dir: /data/cache
+  server_type: normal
+
+path:
+  input_dirs:
+    - path: /data/inputs
+      variation_generation_counts: 10  # Maximum diversity
+      final_system_prompt_additional_context: "Think carefully and thoroughly before responding. Provide detailed, accurate answers."
+      factual_gen_subset_size_per_way: 10000
+      factual_gen_use_subset: False
+      rag_subset_size: 5000
+      rag_use_subset: False  # Process everything for quality
+      correction_subset_size: 5000
+      correction_use_subset: False
+  output_dir: /data/outputs
+  models_dir: /data/models
+  huggingface_cache_dir: /data/cache/huggingface
+
+system:
+  number_of_factual_sft_generations_to_do: 5  # Maximum coverage
+  remove_system_prompt_ratio: 0.15  # Keep more context
+  remove_thought_process_ratio: 0.15
+  remove_thought_process_prompt: Do not write out your thoughts first; answer immediately.
+  final_answer_str: "Answer:"
+  generic_thought_process_on_domain_data: True
+  cite_sources_at_end: True
+  completion_mode: False
+  concurrency_limit: 75  # Lower for stability and quality
+  use_stop: True
+  subset_size: 100
+  use_subset: False
+  chunk_size: 3500  # Smaller chunks for precision
+  what_percent_of_sft_is_pretrain: 
+  num_tokens_pretraining_in_sft: 3000000  # More tokens
+  shared_instruction: |
+    You are a highly capable Artificial Intelligence with extensive knowledge and sophisticated reasoning abilities. You excel at understanding complex questions and providing detailed, accurate, and well-reasoned responses.
+    
+    When answering questions:
+    1. First, carefully analyze what is being asked
+    2. Consider the relevant information and context
+    3. Structure your response logically
+    4. Provide comprehensive yet clear explanations
+    5. Include relevant examples or details when helpful
+    
+    Always think step by step before responding. Preface your detailed thought process with "Thought Process:" and your carefully crafted response with "Answer:". When recalling information from sources, list the specific filenames in a "Sources Cited" section at the bottom of your response for reference and verification.
+
+pdf_cleaning:
+  pdf_cleaning_chunk_size: 3000  # Smaller for precision
+  pdf_cleaning_small_model: Qwen/QwQ-32B-Preview
+  pdf_cleaning_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct  # Largest model
+  pdf_cleaning_small_mode: api
+  pdf_cleaning_large_mode: api
+  pdf_cleaning_small_base_url: https://api.deepinfra.com/v1/openai
+  pdf_cleaning_large_base_url: https://api.deepinfra.com/v1/openai
+  pdf_cleaning_small_api_key: ${API_KEY}
+  pdf_cleaning_large_api_key: ${API_KEY}
+  pdf_cleaning_use_stop: True
+  pdf_cleaning_cost_small_input: 0.15
+  pdf_cleaning_cost_small_output: 0.20
+  pdf_cleaning_cost_large_input: 0.60
+  pdf_cleaning_cost_large_output: 0.80
+  pdf_cleaning_prompts: prompts
+  pdf_cleaning_default_prompts: prompts
+
+representation_variation:
+  representation_variation_chunk_size: 3500
+  representation_variation_small_model: Qwen/QwQ-32B-Preview
+  representation_variation_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct
+  representation_variation_small_mode: api
+  representation_variation_large_mode: api
+  representation_variation_small_base_url: https://api.deepinfra.com/v1/openai
+  representation_variation_large_base_url: https://api.deepinfra.com/v1/openai
+  representation_variation_small_api_key: ${API_KEY}
+  representation_variation_large_api_key: ${API_KEY}
+  representation_variation_cost_small_input: 0.15
+  representation_variation_cost_small_output: 0.20
+  representation_variation_cost_large_input: 0.60
+  representation_variation_cost_large_output: 0.80
+  representation_variation_use_stop: True
+  representation_variation_prompts: prompts
+  representation_variation_default_prompts: prompts
+  representation_variation_prompts_inferred: prompts_inferred_facts
+
+factual:
+  factual_chunk_size: 3500
+  factual_small_model: Qwen/QwQ-32B-Preview
+  factual_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct
+  factual_small_mode: api
+  factual_large_mode: api
+  factual_small_base_url: https://api.deepinfra.com/v1/openai
+  factual_large_base_url: https://api.deepinfra.com/v1/openai
+  factual_small_api_key: ${API_KEY}
+  factual_large_api_key: ${API_KEY}
+  factual_cost_small_input: 0.15
+  factual_cost_small_output: 0.20
+  factual_cost_large_input: 0.60
+  factual_cost_large_output: 0.80
+  factual_use_stop: True
+  factual_prompts: prompts
+  factual_default_prompts: prompts
+
+rag:
+  rag_chunk_size: 3500
+  rag_small_model: Qwen/QwQ-32B-Preview
+  rag_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct
+  rag_small_mode: api
+  rag_large_mode: api
+  rag_small_base_url: https://api.deepinfra.com/v1/openai
+  rag_large_base_url: https://api.deepinfra.com/v1/openai
+  rag_small_api_key: ${API_KEY}
+  rag_large_api_key: ${API_KEY}
+  rag_cost_small_input: 0.15
+  rag_cost_small_output: 0.20
+  rag_cost_large_input: 0.60
+  rag_cost_large_output: 0.80
+  rag_use_stop: True
+  rag_prompts: prompts
+  rag_default_prompts: prompts
+
+correction:
+  correction_chunk_size: 3500
+  correction_small_model: Qwen/QwQ-32B-Preview
+  correction_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct
+  correction_small_mode: api
+  correction_large_mode: api
+  correction_small_base_url: https://api.deepinfra.com/v1/openai
+  correction_large_base_url: https://api.deepinfra.com/v1/openai
+  correction_small_api_key: ${API_KEY}
+  correction_large_api_key: ${API_KEY}
+  correction_cost_small_input: 0.15
+  correction_cost_small_output: 0.20
+  correction_cost_large_input: 0.60
+  correction_cost_large_output: 0.80
+  correction_use_stop: True
+  correction_prompts: prompts
+  correction_default_prompts: prompts
+
+generic_dataset_paths:
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_conversation_starters.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_metamath.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_orca.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_winogrande.parquet
+
+generic_dataset_percentages:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+
+other_pretrain_kwargs: {}
+other_finetune_kwargs: {}
+
+conversion:
+  conversion_chunk_size: 3500
+  conversion_small_model: Qwen/QwQ-32B-Preview
+  conversion_large_model: meta-llama/Meta-Llama-3.1-405B-Instruct
+  conversion_small_mode: api
+  conversion_large_mode: api
+  conversion_small_base_url: https://api.deepinfra.com/v1/openai
+  conversion_large_base_url: https://api.deepinfra.com/v1/openai
+  conversion_small_api_key: ${API_KEY}
+  conversion_large_api_key: ${API_KEY}
+  conversion_cost_small_input: 0.15
+  conversion_cost_small_output: 0.20
+  conversion_cost_large_input: 0.60
+  conversion_cost_large_output: 0.80
+  conversion_use_stop: True
+  conversion_prompts: prompts
+  conversion_default_prompts: prompts
