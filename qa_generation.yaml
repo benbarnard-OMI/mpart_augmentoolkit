@@ -1,0 +1,194 @@
+pipeline: factual-datagen-pipeline
+
+# Content-Agnostic QA Generation Configuration for UIUC Campus Cluster
+# This configuration is designed to generate rich and numerous QA pairs from any input documents
+# Environment variables can be used to customize the configuration at runtime
+
+no_flatten:
+  - factual_sft
+  - template_kwargs
+  - generic_dataset_paths
+  - generic_dataset_percentages
+  - other_pretrain_kwargs
+  - other_finetune_kwargs
+  - input_dirs
+
+model_auto_train:
+  do_train: False  # Set to True if you want to train a model after generation
+  runpod_api_key: ${RUNPOD_API_KEY:-}
+  huggingface_token: ${HUGGINGFACE_TOKEN:-}
+  wandb_api_key: ${WANDB_API_KEY:-}
+  pod_id: ${POD_ID:-}
+
+model_auto_run:
+  do_run: False  # Set to True to automatically run the trained model
+  cache_dir: /data/cache
+  server_type: normal
+
+path:
+  input_dirs:
+    - path: ${INPUT_DIR:-/data/inputs}
+      variation_generation_counts: ${VARIATION_COUNT:-6}  # Higher = more QA pairs, more diversity
+      final_system_prompt_additional_context: ${SYSTEM_PROMPT_CONTEXT:-Think step by step, then respond.}
+      factual_gen_subset_size_per_way: ${FACTUAL_SUBSET_SIZE:-3000}
+      factual_gen_use_subset: ${FACTUAL_USE_SUBSET:-False}
+      rag_subset_size: ${RAG_SUBSET_SIZE:-2000}
+      rag_use_subset: ${RAG_USE_SUBSET:-True}
+      correction_subset_size: ${CORRECTION_SUBSET_SIZE:-2000}
+      correction_use_subset: ${CORRECTION_USE_SUBSET:-True}
+  output_dir: ${OUTPUT_DIR:-/data/outputs}
+  models_dir: /data/models
+  huggingface_cache_dir: /data/cache/huggingface
+
+system:
+  number_of_factual_sft_generations_to_do: ${NUM_FACTUAL_GENERATIONS:-3}  # Number of QA generation passes
+  remove_system_prompt_ratio: ${REMOVE_SYSTEM_PROMPT_RATIO:-0.2}
+  remove_thought_process_ratio: ${REMOVE_THOUGHT_RATIO:-0.2}
+  remove_thought_process_prompt: Do not write out your thoughts first; answer immediately.
+  final_answer_str: "Answer:"
+  generic_thought_process_on_domain_data: ${GENERIC_THOUGHT_PROCESS:-True}
+  cite_sources_at_end: ${CITE_SOURCES:-True}
+  completion_mode: False
+  concurrency_limit: ${CONCURRENCY_LIMIT:-100}
+  use_stop: True
+  subset_size: ${SUBSET_SIZE:-50}
+  use_subset: ${USE_SUBSET:-False}
+  chunk_size: ${CHUNK_SIZE:-4000}
+  what_percent_of_sft_is_pretrain: 
+  num_tokens_pretraining_in_sft: ${NUM_PRETRAIN_TOKENS:-2000000}
+  shared_instruction: |
+    ${SHARED_INSTRUCTION:-You are a capable Artificial Intelligence with extensive knowledge and reasoning abilities. Always think step by step before responding. Your thought process should involve understanding the question, gathering relevant information, and constructing a comprehensive answer. Follow any specific instructions provided, or infer the appropriate response based on context.
+    
+    Preface your thoughts with "Thought Process:" and your response with "Answer:". If you recall information from sources, list the filenames in a "Sources Cited" section at the bottom of your response.}
+
+# PDF Cleaning Configuration (for processing PDF inputs)
+pdf_cleaning:
+  pdf_cleaning_chunk_size: ${PDF_CHUNK_SIZE:-4000}
+  pdf_cleaning_small_model: ${PDF_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  pdf_cleaning_large_model: ${PDF_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  pdf_cleaning_small_mode: ${PDF_SMALL_MODE:-api}
+  pdf_cleaning_large_mode: ${PDF_LARGE_MODE:-api}
+  pdf_cleaning_small_base_url: ${PDF_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  pdf_cleaning_large_base_url: ${PDF_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  pdf_cleaning_small_api_key: ${PDF_SMALL_API_KEY:-${API_KEY}}
+  pdf_cleaning_large_api_key: ${PDF_LARGE_API_KEY:-${API_KEY}}
+  pdf_cleaning_use_stop: True
+  pdf_cleaning_cost_small_input: 0.15
+  pdf_cleaning_cost_small_output: 0.20
+  pdf_cleaning_cost_large_input: 0.23
+  pdf_cleaning_cost_large_output: 0.40
+  pdf_cleaning_prompts: prompts
+  pdf_cleaning_default_prompts: prompts
+
+# Representation Variation Configuration (creates diverse QA pairs)
+representation_variation:
+  representation_variation_chunk_size: ${REPVAR_CHUNK_SIZE:-4000}
+  representation_variation_small_model: ${REPVAR_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  representation_variation_large_model: ${REPVAR_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  representation_variation_small_mode: ${REPVAR_SMALL_MODE:-api}
+  representation_variation_large_mode: ${REPVAR_LARGE_MODE:-api}
+  representation_variation_small_base_url: ${REPVAR_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  representation_variation_large_base_url: ${REPVAR_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  representation_variation_small_api_key: ${REPVAR_SMALL_API_KEY:-${API_KEY}}
+  representation_variation_large_api_key: ${REPVAR_LARGE_API_KEY:-${API_KEY}}
+  representation_variation_cost_small_input: 0.15
+  representation_variation_cost_small_output: 0.20
+  representation_variation_cost_large_input: 0.23
+  representation_variation_cost_large_output: 0.40
+  representation_variation_use_stop: True
+  representation_variation_prompts: prompts
+  representation_variation_default_prompts: prompts
+  representation_variation_prompts_inferred: prompts_inferred_facts
+
+# Factual Generation Configuration (core QA generation)
+factual:
+  factual_chunk_size: ${FACTUAL_CHUNK_SIZE:-4000}
+  factual_small_model: ${FACTUAL_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  factual_large_model: ${FACTUAL_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  factual_small_mode: ${FACTUAL_SMALL_MODE:-api}
+  factual_large_mode: ${FACTUAL_LARGE_MODE:-api}
+  factual_small_base_url: ${FACTUAL_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  factual_large_base_url: ${FACTUAL_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  factual_small_api_key: ${FACTUAL_SMALL_API_KEY:-${API_KEY}}
+  factual_large_api_key: ${FACTUAL_LARGE_API_KEY:-${API_KEY}}
+  factual_cost_small_input: 0.15
+  factual_cost_small_output: 0.20
+  factual_cost_large_input: 0.23
+  factual_cost_large_output: 0.40
+  factual_use_stop: True
+  factual_prompts: prompts
+  factual_default_prompts: prompts
+
+# RAG Data Generation Configuration
+rag:
+  rag_chunk_size: ${RAG_CHUNK_SIZE:-4000}
+  rag_small_model: ${RAG_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  rag_large_model: ${RAG_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  rag_small_mode: ${RAG_SMALL_MODE:-api}
+  rag_large_mode: ${RAG_LARGE_MODE:-api}
+  rag_small_base_url: ${RAG_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  rag_large_base_url: ${RAG_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  rag_small_api_key: ${RAG_SMALL_API_KEY:-${API_KEY}}
+  rag_large_api_key: ${RAG_LARGE_API_KEY:-${API_KEY}}
+  rag_cost_small_input: 0.15
+  rag_cost_small_output: 0.20
+  rag_cost_large_input: 0.23
+  rag_cost_large_output: 0.40
+  rag_use_stop: True
+  rag_prompts: prompts
+  rag_default_prompts: prompts
+
+# Correction Pipeline Configuration
+correction:
+  correction_chunk_size: ${CORRECTION_CHUNK_SIZE:-4000}
+  correction_small_model: ${CORRECTION_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  correction_large_model: ${CORRECTION_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  correction_small_mode: ${CORRECTION_SMALL_MODE:-api}
+  correction_large_mode: ${CORRECTION_LARGE_MODE:-api}
+  correction_small_base_url: ${CORRECTION_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  correction_large_base_url: ${CORRECTION_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  correction_small_api_key: ${CORRECTION_SMALL_API_KEY:-${API_KEY}}
+  correction_large_api_key: ${CORRECTION_LARGE_API_KEY:-${API_KEY}}
+  correction_cost_small_input: 0.15
+  correction_cost_small_output: 0.20
+  correction_cost_large_input: 0.23
+  correction_cost_large_output: 0.40
+  correction_use_stop: True
+  correction_prompts: prompts
+  correction_default_prompts: prompts
+
+# Generic Data Configuration
+generic_dataset_paths:
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_conversation_starters.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_metamath.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_orca.parquet
+  - /augmentoolkit/generation/core_composition/complete_factual_dataset/generic_data/generic_winogrande.parquet
+
+generic_dataset_percentages:
+  - 1.0
+  - 1.0
+  - 1.0
+  - 1.0
+
+# Additional training kwargs
+other_pretrain_kwargs: {}
+other_finetune_kwargs: {}
+
+# Conversion Configuration
+conversion:
+  conversion_chunk_size: ${CONVERSION_CHUNK_SIZE:-4000}
+  conversion_small_model: ${CONVERSION_SMALL_MODEL:-Qwen/QwQ-32B-Preview}
+  conversion_large_model: ${CONVERSION_LARGE_MODEL:-meta-llama/Meta-Llama-3.1-70B-Instruct}
+  conversion_small_mode: ${CONVERSION_SMALL_MODE:-api}
+  conversion_large_mode: ${CONVERSION_LARGE_MODE:-api}
+  conversion_small_base_url: ${CONVERSION_SMALL_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  conversion_large_base_url: ${CONVERSION_LARGE_BASE_URL:-https://api.deepinfra.com/v1/openai}
+  conversion_small_api_key: ${CONVERSION_SMALL_API_KEY:-${API_KEY}}
+  conversion_large_api_key: ${CONVERSION_LARGE_API_KEY:-${API_KEY}}
+  conversion_cost_small_input: 0.15
+  conversion_cost_small_output: 0.20
+  conversion_cost_large_input: 0.23
+  conversion_cost_large_output: 0.40
+  conversion_use_stop: True
+  conversion_prompts: prompts
+  conversion_default_prompts: prompts
