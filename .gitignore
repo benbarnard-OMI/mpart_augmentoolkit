@@ -1,0 +1,25 @@
+# Data directories (don't commit large files)
+data/raw/
+data/processed/
+data/samples/*.pdf
+output/
+
+# Logs
+logs/
+*.log
+
+# Slurm outputs
+slurm-*.out
+slurm-*.err
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Docker/Apptainer
+*.sif
+
+# Environment
+.env
+*.key
