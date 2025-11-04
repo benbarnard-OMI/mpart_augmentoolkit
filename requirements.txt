@@ -1,8 +1,108 @@
-docling>=0.0.14
-vllm>=0.5.0
-ollama
-pdfminer.six
-pypdf
-python-dotenv
-loguru
-rich
+# ============================================================================
+# Requirements for Augmentoolkit with Llama 3.1 70B on NVIDIA GPUs
+# Compatible with CUDA 12.1
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Core Dependencies
+# ----------------------------------------------------------------------------
+fastapi>=0.100.0,<1.0.0
+uvicorn[standard]>=0.23.0,<1.0.0
+huey>=2.0.0,<3.0.0
+pydantic>=2.0.0,<3.0.0
+PyYAML>=6.0,<7.0
+openai>=1.0.0,<2.0.0
+
+# ----------------------------------------------------------------------------
+# LLM Serving & Model Support
+# ----------------------------------------------------------------------------
+# PyTorch with CUDA 12.1 support
+# Note: For CUDA-enabled PyTorch, install from PyTorch index:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Or let vLLM handle CUDA dependencies during its installation
+torch>=2.0.0,<3.0.0
+torchvision>=0.15.0,<0.20.0
+torchaudio>=2.0.0,<3.0.0
+
+# vLLM for efficient LLM serving on GPUs (Llama 3.1 70B)
+vllm>=0.5.0,<1.0.0
+
+# Transformers and related libraries
+transformers>=4.35.0,<5.0.0
+accelerate>=0.24.0,<1.0.0
+datasets==2.15.0
+peft>=0.6.0,<1.0.0
+sentencepiece>=0.1.99,<1.0.0
+
+# ----------------------------------------------------------------------------
+# PDF & Document Processing
+# ----------------------------------------------------------------------------
+# Docling for PDF to Markdown conversion
+docling>=0.0.14,<1.0.0
+
+# Additional PDF processing libraries (Augmentoolkit dependencies)
+pypdf>=3.0.0,<4.0.0
+PyMuPDF>=1.23.0,<2.0.0
+pytesseract>=0.3.10,<1.0.0
+pdfminer.six>=20221105,<20240000
+pdf2image>=1.16.0,<2.0.0
+Pillow>=10.0.0,<11.0.0
+python-docx>=1.0.0,<2.0.0
+
+# Document parsing utilities
+beautifulsoup4>=4.12.0,<5.0.0
+jinja2>=3.1.0,<4.0.0
+
+# ----------------------------------------------------------------------------
+# Data Processing & Utilities
+# ----------------------------------------------------------------------------
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<3.0.0
+scikit-learn>=1.3.0,<2.0.0
+nltk>=3.8.0,<4.0.0
+nlpaug>=1.1.11,<2.0.0
+protobuf==3.20.0
+
+# ----------------------------------------------------------------------------
+# Web & API
+# ----------------------------------------------------------------------------
+requests>=2.31.0,<3.0.0
+httpx>=0.24.0,<1.0.0
+cohere>=4.0.0,<5.0.0
+
+# ----------------------------------------------------------------------------
+# Database & Caching
+# ----------------------------------------------------------------------------
+redis>=5.0.0,<6.0.0
+chromadb>=0.4.0,<1.0.0
+
+# ----------------------------------------------------------------------------
+# Machine Learning & Experiment Tracking
+# ----------------------------------------------------------------------------
+wandb>=0.15.0,<1.0.0
+rank_bm25>=0.2.2,<1.0.0
+
+# ----------------------------------------------------------------------------
+# Utilities
+# ----------------------------------------------------------------------------
+tqdm>=4.66.0,<5.0.0
+chardet>=5.0.0,<6.0.0
+tabulate>=0.9.0,<1.0.0
+matplotlib>=3.7.0,<4.0.0
+certifi>=2023.0.0
+python-multipart>=0.0.6,<1.0.0
+python-dotenv>=1.0.0,<2.0.0
+loguru>=0.7.0,<1.0.0
+rich>=13.0.0,<14.0.0
+
+# ----------------------------------------------------------------------------
+# Additional Dependencies
+# ----------------------------------------------------------------------------
+# Ollama (for local model serving alternative)
+ollama>=0.1.0,<1.0.0
+
+# Discord integration (if needed)
+discord.py>=2.3.0,<3.0.0
+
+# RunPod integration (if needed)
+runpod>=1.0.0,<2.0.0
