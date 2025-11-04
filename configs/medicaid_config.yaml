@@ -1,0 +1,503 @@
+################################################################################
+# Augmentoolkit Configuration for Medicaid Policy Dataset
+################################################################################
+#
+# PURPOSE: Process 1,100 Medicaid policy PDFs to generate high-quality 
+# question-answer pairs for model fine-tuning.
+#
+# REFERENCE: Based on Augmentoolkit's _LOCAL_DATAGEN_complete_factual.yaml
+# https://github.com/e-p-armstrong/augmentoolkit/blob/master/external_configs/_LOCAL_DATAGEN_complete_factual.yaml
+#
+# USAGE: This config is designed for Docker container execution with:
+#   - Data mounted at: /workspace/data
+#   - Augmentoolkit at: /workspace/augmentoolkit
+#   - Output to: /workspace/output
+#
+################################################################################
+
+pipeline: medicaid-factual-datagen-pipeline
+
+# Prevent certain nested structures from being flattened during processing
+no_flatten:
+  - factual_sft
+  - template_kwargs
+  - generic_dataset_paths
+  - generic_dataset_percentages
+  - other_pretrain_kwargs
+  - other_finetune_kwargs
+  - input_dirs
+
+################################################################################
+# SECTION 1: FILE PATHS
+################################################################################
+
+path:
+  # Input directories containing converted markdown files from Medicaid PDFs
+  input_dirs:
+    - path: /workspace/data/processed  # Where converted markdown files are stored
+      variation_generation_counts: 4  # Generate 4 variations per QA pair for diversity
+      final_system_prompt_additional_context: "Focus on policy-specific details and cite relevant sections when possible."
+      factual_gen_subset_size_per_way: 2000  # Size of subset for factual generation
+      factual_gen_use_subset: False  # Process all files (set True for testing with subset)
+      rag_subset_size: 1500  # Size of RAG subset if enabled
+      rag_use_subset: True  # Use subset for RAG processing
+      correction_subset_size: 1500  # Size of correction subset
+      correction_use_subset: True  # Use subset for correction
+  
+  # Output directory for generated datasets and logs
+  output_dir: /workspace/output
+  
+  # Model directory (only used if training is enabled)
+  models_dir: /workspace/models
+  
+  # Hugging Face cache directory
+  huggingface_cache_dir: /workspace/cache/huggingface
+
+################################################################################
+# SECTION 2: MODEL CONFIGURATION
+################################################################################
+
+# PDF Cleaning Pipeline - Processes and cleans PDF-to-text conversions
+pdf_cleaning:
+  pdf_cleaning_chunk_size: 1500  # Medicaid docs are dense; smaller chunks for accuracy
+  pdf_cleaning_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  pdf_cleaning_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  pdf_cleaning_small_mode: api  # Using vLLM API endpoint
+  pdf_cleaning_large_mode: api
+  pdf_cleaning_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  pdf_cleaning_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  pdf_cleaning_small_api_key: ${LLAMA_API_KEY}
+  pdf_cleaning_large_api_key: ${LLAMA_API_KEY}
+  pdf_cleaning_use_stop: True  # Enable stop sequences for better control
+  pdf_cleaning_cost_small_input: 0.30  # Cost tracking (adjust for your provider)
+  pdf_cleaning_cost_small_output: 0.88
+  pdf_cleaning_cost_large_input: 0.30
+  pdf_cleaning_cost_large_output: 0.88
+  pdf_cleaning_prompts: /workspace/augmentoolkit/prompts
+  pdf_cleaning_default_prompts: /workspace/augmentoolkit/prompts
+
+# Representation Variation Pipeline - Creates diverse phrasings of QA pairs
+representation_variation:
+  representation_variation_chunk_size: 1500  # Match PDF cleaning chunk size
+  representation_variation_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  representation_variation_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  representation_variation_small_mode: api
+  representation_variation_large_mode: api
+  representation_variation_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  representation_variation_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  representation_variation_small_api_key: ${LLAMA_API_KEY}
+  representation_variation_large_api_key: ${LLAMA_API_KEY}
+  representation_variation_cost_small_input: 0.30
+  representation_variation_cost_small_output: 0.88
+  representation_variation_cost_large_input: 0.30
+  representation_variation_cost_large_output: 0.88
+  representation_variation_use_stop: True
+  representation_variation_prompts: /workspace/augmentoolkit/prompts
+  representation_variation_default_prompts: /workspace/augmentoolkit/prompts
+  representation_variation_prompts_inferred: /workspace/augmentoolkit/prompts_inferred_facts
+  representation_variation_default_prompts_inferred: /workspace/augmentoolkit/prompts_inferred_facts
+  code_variation_functions: ["keyboard_augmentation"]  # Text augmentation functions
+
+################################################################################
+# SECTION 3: PROCESSING PARAMETERS
+################################################################################
+
+system:
+  # Number of factual QA generations to create (affects dataset size)
+  number_of_factual_sft_generations_to_do: 5  # Set to 5 to generate 5 QA pairs per chunk
+  
+  # Completion mode: True for completion endpoints, False for chat endpoints
+  completion_mode: True  # Using completion endpoints as specified
+  
+  # Data diversity settings - remove system prompts/thoughts from some % of data
+  remove_system_prompt_ratio: 0.2  # Remove system prompts from 20% of data
+  remove_thought_process_ratio: 0.2  # Remove thought process from 20% of data
+  remove_thought_process_prompt: "Answer directly without explaining your reasoning."
+  final_answer_str: "Answer:"  # Marker for final answer in thought process
+  
+  # Advanced features
+  generic_thought_process_on_domain_data: True  # Apply thought process structure to domain data
+  cite_sources_at_end: True  # Append source citations to answers (IMPORTANT for Medicaid)
+  
+  # Performance tuning
+  concurrency_limit: 50  # CRITICAL: Adjust based on your hardware/API rate limits
+                         # For local GPU: 5-20 depending on VRAM
+                         # For API: 50-200 depending on rate limits
+  
+  use_stop: True  # Enable stop sequences
+  
+  # Subset testing (set use_subset: True for initial testing)
+  subset_size: 30  # Process only 30 chunks when testing
+  use_subset: False  # Set to True for testing, False for full production run
+  
+  # Chunking configuration
+  chunk_size: 1500  # Chunk size for text processing (Medicaid docs are dense)
+  
+  # Pretraining data configuration
+  what_percent_of_sft_is_pretrain: # Leave empty to use num_tokens_pretraining_in_sft
+  num_tokens_pretraining_in_sft: 2000000  # 2M tokens for pretraining
+  
+  # Shared instruction that appears across all prompts
+  shared_instruction: |
+    You are a specialized AI assistant with expertise in Medicaid policy and healthcare regulations.
+    Your primary function is to analyze Medicaid policy documents and generate accurate, well-sourced 
+    question-answer pairs that can be used to train other AI models.
+    
+    When generating questions and answers:
+    - Focus on factual, policy-specific information
+    - Cite specific sections, pages, or policy numbers when possible
+    - Ensure answers are grounded in the source documents
+    - Avoid speculation or information not present in the documents
+    - Use clear, professional language appropriate for healthcare policy
+    
+    Format: Think first about the content, then generate your questions and answers.
+    Preface your reasoning with "Thought Process:" and your output with "Answer:".
+    Always list sources cited at the bottom of your response.
+
+################################################################################
+# SECTION 4: QUALITY CONTROL
+################################################################################
+
+# Factual SFT (Supervised Fine-Tuning) Settings
+# These define different question types and their validation rules
+factual_sft:
+  # Open-ended questions that require comprehensive answers
+  openended:
+    prompts: /workspace/augmentoolkit/prompt_overrides/openended
+    default_prompts: /workspace/augmentoolkit/prompts
+    single_turn: True  # Single turn Q&A
+    skip_question_check: False  # ENABLE question validation
+    skip_answer_relevancy_check: False  # ENABLE answer relevancy check
+    skip_answer_accuracy_check: False  # ENABLE answer accuracy check
+    skip_repair_qa_tuples: False  # ENABLE repair of bad QA pairs
+    multi_source: True  # Allow answers to reference multiple sources
+  
+  # Questions testing for hallucination detection
+  hallucination:
+    prompts: /workspace/augmentoolkit/prompt_overrides/hallucination
+    default_prompts: /workspace/augmentoolkit/prompts
+    single_turn: True
+    skip_question_check: True
+    skip_answer_relevancy_check: True
+    skip_answer_accuracy_check: True
+    skip_repair_qa_tuples: True
+    multi_source: True
+  
+  # Negative examples (questions that should be refused)
+  negative:
+    prompts: /workspace/augmentoolkit/prompt_overrides/negative
+    default_prompts: /workspace/augmentoolkit/prompts
+    single_turn: True
+    skip_question_check: True
+    skip_answer_relevancy_check: True
+    skip_answer_accuracy_check: True
+    skip_repair_qa_tuples: True
+    multi_source: True
+  
+  # Vague questions requiring clarification
+  vague:
+    prompts: /workspace/augmentoolkit/prompt_overrides/vague
+    default_prompts: /workspace/augmentoolkit/prompts
+    single_turn: True
+    skip_question_check: True
+    skip_answer_relevancy_check: True
+    skip_answer_accuracy_check: True
+    skip_repair_qa_tuples: True
+    multi_source: True
+  
+  # Follow-up questions in multi-turn conversations
+  followup:
+    prompts: /workspace/augmentoolkit/prompt_overrides/followup
+    default_prompts: /workspace/augmentoolkit/prompts
+    single_turn: False  # Multi-turn conversation
+    skip_question_check: True
+    skip_answer_relevancy_check: True
+    skip_answer_accuracy_check: True
+    skip_repair_qa_tuples: True
+    multi_source: True
+
+# Model configuration for factual generation
+factual_sft_settings:
+  factual_use_stop: True
+  factual_chunk_size: 1500  # Match system chunk size
+  factual_completion_mode: True  # Using completion mode
+  
+  # Small model (for quick validation tasks)
+  factual_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  factual_small_api_key: ${LLAMA_API_KEY}
+  factual_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  factual_small_mode: api
+  
+  # Large model (for main generation tasks)
+  factual_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  factual_large_api_key: ${LLAMA_API_KEY}
+  factual_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  factual_large_mode: api
+  
+  # Cost tracking (per million tokens)
+  factual_cost_per_million_small_input: 0.30
+  factual_cost_per_million_small_output: 0.88
+  factual_cost_per_million_large_input: 0.30
+  factual_cost_per_million_large_output: 0.88
+  
+  # Prompt variations for diverse system prompts (includes source citation)
+  final_assistant_prompts_no_rag: [
+    'You are a helpful AI assistant specializing in Medicaid policy. Cite sources when possible. MAX SOURCES: FOUR (4).',
+    'Task: ANSWER QUESTIONS about MEDICAID POLICY. You may cite up to 4 sources per response.',
+    'As a Medicaid policy expert AI, answer questions accurately. Cite up to four (4) relevant sources.',
+    'Medicaid policy AI assistant. Use up to 4 sources when answering.',
+    'AI ASSISTANT with EXPERTISE in Medicaid healthcare policy. Cite UP TO FOUR (4) sources per response.',
+    'Knowledgeable Medicaid policy AI. Reference up to four sources in your answers for accuracy.',
+    'Medicaid policy specialist. Four sources maximum. Be precise and cite regulations.',
+    'You are an expert in Medicaid policy and regulations. Cite up to four (4) authoritative sources.',
+    'ai assistant for medicaid policy questions. up to 4 sources allowed.'
+  ]
+  
+  # Conversation structure
+  items_per_conversation: 3  # Number of Q&A pairs per conversation
+  combine_sharegpt_target_pairs: 5  # Target pairs to combine in ShareGPT format
+
+# Dataset context (appears in prompts)
+dataset_context: Medicaid Healthcare Policy
+
+################################################################################
+# SECTION 5: RAG (Retrieval-Augmented Generation) CONFIGURATION
+################################################################################
+
+rag_data:
+  # Percentage of time RAG should "fail" (not retrieve context) for robustness
+  rag_failure_percentage: 0.50  # 50% of time, model answers without retrieval
+  
+  # Maximum number of chunks to retrieve
+  rag_max_chunks: 3
+  
+  # Formatting templates for conversation structure
+  user_format: "Human: {{user}}"
+  system_format: "System: {{system}}"
+  assistant_format: "Assistant: {{assistant}}"
+  bos: "<s>"  # Beginning of sequence token
+  
+  # RAG system prompts with retrieved context
+  final_assistant_prompts: [
+    'You are a Medicaid policy AI assistant. Use the following policy excerpts and your knowledge:
+    
+    {data}',
+    '{data}
+    
+    Task: ANSWER QUESTIONS about Medicaid policy using the information above and your expertise.',
+    'Use the policy excerpts below along with your Medicaid expertise:
+    
+    {data}',
+    'Medicaid policy AI with context. {data}',
+    'MEDICAID POLICY EXPERT AI. Here is relevant policy information:
+    
+    {data}',
+    'As a Medicaid policy AI, use this context and your knowledge:
+    
+    {data}',
+    'Medicaid specialist. Use this information:
+    
+    {data}',
+    'Expert in Medicaid policy. Consider this information:
+    
+    {data}',
+    'medicaid ai assistant. context info:
+    
+    {data}'
+  ]
+  
+  # RAG processing settings
+  num_items_per_group: 3  # Items per RAG group
+  rag_skip_filter_chunks: False  # Enable chunk filtering
+  
+  # Model configuration for RAG
+  rag_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  rag_small_api_key: ${LLAMA_API_KEY}
+  rag_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  rag_small_mode: api
+  
+  rag_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  rag_large_api_key: ${LLAMA_API_KEY}
+  rag_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  rag_large_mode: api
+  
+  # Cost tracking
+  rag_cost_per_million_small_input: 0.30
+  rag_cost_per_million_small_output: 0.88
+  rag_cost_per_million_large_input: 0.30
+  rag_cost_per_million_large_output: 0.88
+  
+  rag_use_stop: True
+  rag_prompts: /workspace/augmentoolkit/prompts
+  rag_default_prompts: /workspace/augmentoolkit/prompts
+
+################################################################################
+# SECTION 6: GENERIC DATA TRANSFORMATION
+################################################################################
+
+# Used only if generic_thought_process_on_domain_data is True
+transform_generic_data:
+  transform_generic_data_use_stop: True
+  
+  # Model configuration
+  transform_generic_data_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  transform_generic_data_large_api_key: ${LLAMA_API_KEY}
+  transform_generic_data_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  transform_generic_data_large_mode: api
+  
+  transform_generic_data_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  transform_generic_data_small_api_key: ${LLAMA_API_KEY}
+  transform_generic_data_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  transform_generic_data_small_mode: api
+  
+  # Chain-of-thought markers
+  transform_generic_cot_preface: "Thought Process:"
+  transform_generic_cot_suffix: "\nAnswer:"
+  transform_generic_prompts: "/workspace/augmentoolkit/prompts"
+  
+  # Cost tracking
+  transform_generic_data_cost_per_million_small_input: 0.30
+  transform_generic_data_cost_per_million_small_output: 0.88
+  transform_generic_data_cost_per_million_large_input: 0.30
+  transform_generic_data_cost_per_million_large_output: 0.88
+
+################################################################################
+# SECTION 7: CORRECTION PIPELINE
+################################################################################
+
+# Validates and corrects generated QA pairs
+correction_pipeline:
+  correction_use_subset: True  # Use subset for testing
+  correction_subset_size: 30  # Subset size for testing
+  correction_chunk_size: 1500  # Match system chunk size
+  
+  # Model configuration
+  correction_small_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  correction_small_api_key: ${LLAMA_API_KEY}
+  correction_small_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  correction_small_mode: api
+  
+  correction_large_model: ${LLAMA_MODEL:-meta-llama/Llama-3.1-70B-Instruct}
+  correction_large_api_key: ${LLAMA_API_KEY}
+  correction_large_base_url: ${VLLM_BASE_URL:-http://localhost:8000/v1}
+  correction_large_mode: api
+  
+  # Cost tracking
+  correction_cost_per_million_small_input: 0.30
+  correction_cost_per_million_small_output: 0.88
+  correction_cost_per_million_large_input: 0.30
+  correction_cost_per_million_large_output: 0.88
+  
+  # Prompt template for correction
+  correction_prompt_template: "{% for message in messages %}{% if (message['role'] == 'system') %}{{message['content'] + '\n'}}{% elif (message['role'] == 'user') %}{{'Human: ' + message['content'] + '\n'}}{% elif message['role'] == 'assistant' %}{{'Assistant: ' + message['content'] + '\n'}}{% endif %}{% endfor %}"
+  
+  correction_use_stop: True
+  correction_completion_mode: True  # Match system completion mode
+  correction_prompts: /workspace/augmentoolkit/prompts
+  correction_default_prompts: /workspace/augmentoolkit/prompts
+
+################################################################################
+# SECTION 8: OUTPUT FORMAT CONFIGURATION
+################################################################################
+
+final_datasaving_settings:
+  # Template format: "atk" (Augmentoolkit), "chatml", or custom jinja2 string
+  template: "atk"  # Using Augmentoolkit's default format
+  template_kwargs: {}  # Additional template arguments (if needed)
+  
+  # Generic datasets to mix with domain-specific data (for generalization)
+  # NOTE: These are optional. Comment out if you only want Medicaid-specific data
+  generic_dataset_paths:
+    - path: Augmentoolkit/Augmentoolkit-Generic-Grabbag-Thoughts
+      context_to_add: "You are a helpful AI assistant specializing in Medicaid healthcare policy."
+      context_to_add_type: "none"  # Options: "none", "system", "human"
+    - path: Augmentoolkit/Augmentoolkit-LMsys-800k-Thoughts
+      context_to_add: "Follow professional and ethical guidelines."
+      context_to_add_type: "human"
+    - path: Augmentoolkit/Openthoughts-100mil-DifferentFormat
+      context_to_add: ""
+      context_to_add_type: "none"
+  
+  # Percentage allocation for each generic dataset
+  generic_dataset_percentages:
+    - 40  # 40% from Generic Grabbag
+    - 30  # 30% from LMsys
+    - 30  # 30% from Openthoughts
+  
+  # Controls to prevent excessive dataset sizes
+  max_samples_per_dataset: 100000  # Max rows per dataset
+  minimum_generic_sft: 2000000  # Minimum 2M tokens for generic SFT
+
+################################################################################
+# SECTION 9: MODEL TRAINING (Optional)
+################################################################################
+
+# Configuration for automatic model training (set do_train: False to skip)
+model_auto_train:
+  do_train: False  # Set to True if you want automatic training
+  runpod_api_key: ${RUNPOD_API_KEY}  # Replace with your RunPod API key
+  huggingface_token: ${HUGGINGFACE_TOKEN}  # Replace with your HF token
+  wandb_api_key: ${WANDB_API_KEY}  # Replace with your W&B API key
+  pod_id: # Optional: ID of existing pod to use
+
+# Automatic model serving (set do_run: False to skip)
+model_auto_run:
+  do_run: False  # Set to True to automatically serve trained model
+  cache_dir: /workspace/cache
+  server_type: normal  # Options: "normal" or "rag"
+
+# Training configuration (only used if do_train: True)
+model_training:
+  base_model: alpindale/Mistral-7B-v0.2-hf  # Base model for fine-tuning
+  pretrain_hub_model_id: YOUR_HF_USERNAME/medicaid-pretrain
+  pretrain_hub_strategy: all_checkpoints
+  finetune_hub_model_id: YOUR_HF_USERNAME/medicaid-finetune
+  finetune_hub_strategy: all_checkpoints
+  context_length: 10000
+  wandb_project: medicaid-policy-training
+  is_mistral_derived_model: True
+  other_pretrain_kwargs: {}
+  other_finetune_kwargs: {}
+
+################################################################################
+# SECTION 10: ADVANCED OPTIONS
+################################################################################
+
+# PDF processing method
+do_not_use_llm_for_pdf_processing: True
+# Set to False if using API AND PDFs have significant OCR errors
+# Using LLM for PDF processing is slower but more accurate for difficult documents
+
+################################################################################
+# USAGE NOTES
+################################################################################
+
+# TESTING YOUR CONFIG:
+# 1. Set system.use_subset: True and system.subset_size: 30
+# 2. Set path.input_dirs[0].factual_gen_use_subset: True
+# 3. Run with a small subset first to validate configuration
+#
+# PRODUCTION RUN:
+# 1. Set system.use_subset: False
+# 2. Set path.input_dirs[0].factual_gen_use_subset: False
+# 3. Adjust system.concurrency_limit based on your hardware/API limits
+#
+# ADJUSTABLE PARAMETERS (based on your needs):
+# - system.number_of_factual_sft_generations_to_do: More = larger dataset
+# - system.chunk_size: Smaller = more granular, larger = more context
+# - system.concurrency_limit: Higher = faster (but needs more resources)
+# - path.input_dirs[0].variation_generation_counts: More = more diversity
+#
+# ENVIRONMENT VARIABLES REQUIRED:
+# - LLAMA_API_KEY: Your API key for the LLM
+# - VLLM_BASE_URL: vLLM endpoint (defaults to http://localhost:8000/v1)
+# - LLAMA_MODEL: Model name (defaults to meta-llama/Llama-3.1-70B-Instruct)
+#
+# OUTPUT FILES:
+# The pipeline will create several output files in /workspace/output/:
+# - dataset.jsonl: Main question-answer pairs
+# - metadata.json: Dataset metadata
+# - logs/: Processing logs
+# - stats/: Generation statistics
+#
+################################################################################
