@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm-server
+    ports:
+      - "8000:8000"
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    command: >
+      --model meta-llama/Meta-Llama-3.1-70B-Instruct
+      --port 8000
+      --gpu-memory-utilization 0.9
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ~/.cache/huggingface:/root/.cache/huggingface
+
+  augmentoolkit:
+    build: .
+    image: mpart-augmentoolkit:v1
+    container_name: augmentoolkit-processor
+    depends_on:
+      - vllm
+    environment:
+      - LLAMA_API_KEY=${LLAMA_API_KEY}
+    volumes:
+      - ./data:/workspace/data
+      - ./output:/workspace/output
+      - ./configs:/workspace/configs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: tail -f /dev/null  # Keep container running
+
+# Usage:
+# 1. docker-compose up -d vllm
+# 2. Wait for vLLM to load model (~5 minutes)
+# 3. docker-compose run augmentoolkit python /workspace/augmentoolkit/processing.py --config /workspace/configs/medicaid_config.yaml
