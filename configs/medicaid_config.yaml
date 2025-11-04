@@ -1,0 +1,344 @@
+# =============================================================================
+# Augmentoolkit Configuration for Medicaid Policy QA Dataset Generation
+# =============================================================================
+#
+# This configuration file is designed to process ~1,100 Medicaid policy PDFs
+# that have been converted to markdown format and generate high-quality
+# question-answer pairs suitable for LLM fine-tuning.
+#
+# USAGE:
+#   augmentoolkit --config configs/medicaid_config.yaml
+#
+# ENVIRONMENT VARIABLES REQUIRED:
+#   - LLAMA_API_KEY: API key for accessing the Llama model endpoint
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PATH CONFIGURATION
+# -----------------------------------------------------------------------------
+# All paths are configured for Docker container environment where:
+# - Data is mounted at /workspace/data
+# - Augmentoolkit is installed at /workspace/augmentoolkit
+# - Output goes to /workspace/output
+
+INPUT_FOLDER: /workspace/data/processed
+# Directory containing converted markdown files from PDFs
+# Expected structure: markdown files (.md) organized by source document
+
+OUTPUT_FOLDER: /workspace/output
+# Directory where generated QA pairs will be saved
+# Output format: JSONL files with question/answer pairs and metadata
+
+DEFAULT_PROMPT_PATH: /workspace/augmentoolkit/prompts
+# Path to Augmentoolkit's default prompt templates
+# These prompts guide the model in generating QA pairs from text chunks
+
+# -----------------------------------------------------------------------------
+# MODEL CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configure the language model used for QA pair generation
+
+MODEL: meta-llama/Llama-3.1-70B-Instruct
+# Model identifier for the Llama 3.1 70B Instruct model
+# This model is accessed via API endpoint (vLLM server)
+
+API_KEY: ${LLAMA_API_KEY}
+# API key for authenticating with the model endpoint
+# IMPORTANT: Set this environment variable before running Augmentoolkit
+# Example: export LLAMA_API_KEY="your-api-key-here"
+
+COMPLETION_MODE: true
+# Set to true when using completion-based API endpoints (e.g., vLLM)
+# Set to false for chat-based endpoints
+# vLLM typically uses completion endpoints, so this should be true
+
+MODE: api
+# Connection mode: 'api' for API endpoints, 'local' for local model loading
+# Since we're using vLLM API server, set to 'api'
+
+# Model inference parameters (adjust based on quality vs. speed tradeoffs)
+TEMPERATURE: 0.2
+# Lower temperature (0.1-0.3) produces more focused, factual outputs
+# Higher temperature (0.7-1.0) produces more creative/diverse outputs
+# 0.2 is optimal for factual policy documentation
+
+MAX_TOKENS: 2048
+# Maximum tokens to generate per response
+# Medicaid policy answers can be detailed, so 2048 allows comprehensive responses
+
+TOP_P: 0.95
+# Nucleus sampling parameter: controls diversity
+# 0.95 is a good balance for maintaining quality while allowing some variation
+
+# -----------------------------------------------------------------------------
+# PROCESSING PARAMETERS
+# -----------------------------------------------------------------------------
+# Configure how documents are chunked and how many QA pairs are generated
+
+CHUNK_SIZE: 1500
+# Number of characters per text chunk before processing
+# Medicaid documents are dense policy text, so 1500 provides good context
+# without overwhelming the model or losing coherence
+# Adjust if you find chunks are too short (increase) or too long (decrease)
+
+CHUNK_OVERLAP: 100
+# Number of characters to overlap between consecutive chunks
+# Overlap prevents losing context at chunk boundaries
+# 100 characters is sufficient for policy documents where context matters
+
+NUM_QUESTIONS_PER_CHUNK: 5
+# Number of question-answer pairs to generate per text chunk
+# 5 QA pairs per chunk balances quality with dataset size
+# Higher values (8-10) increase dataset size but may reduce per-pair quality
+# Lower values (2-3) improve quality but reduce dataset size
+
+# Document processing options
+PARALLEL_WORKERS: 4
+# Number of parallel workers for processing chunks
+# Adjust based on available CPU cores and API rate limits
+# Start with 4 and increase if API can handle more concurrent requests
+
+BATCH_SIZE: 10
+# Number of chunks to process in each batch
+# Larger batches are more efficient but require more memory
+# Adjust based on available RAM and API rate limits
+
+# -----------------------------------------------------------------------------
+# QUALITY CONTROL
+# -----------------------------------------------------------------------------
+# Validation and filtering settings to ensure high-quality QA pairs
+
+# Enable validation checks
+CHECK_TEXT: true
+# Validate that source text chunks meet quality standards
+# Filters out chunks that are too short, malformed, or empty
+
+CHECK_QUESTION: true
+# Validate generated questions meet quality criteria:
+# - Minimum length (not too short)
+# - Proper formatting
+# - Meaningful content (not gibberish)
+
+CHECK_ANSWER: true
+# Validate generated answers meet quality criteria:
+# - Answers the question appropriately
+# - Minimum/maximum length constraints
+# - Grounded in source text
+
+# Validation thresholds
+MIN_QUESTION_LENGTH: 10
+# Minimum number of characters in a valid question
+# Filters out incomplete or malformed questions
+
+MAX_QUESTION_LENGTH: 200
+# Maximum number of characters in a valid question
+# Prevents overly verbose or rambling questions
+
+MIN_ANSWER_LENGTH: 50
+# Minimum number of characters in a valid answer
+# Ensures answers are substantive enough for fine-tuning
+
+MAX_ANSWER_LENGTH: 1500
+# Maximum number of characters in a valid answer
+# Prevents excessively long answers that may lose focus
+
+# Retry logic
+MAX_RETRIES: 3
+# Maximum number of retry attempts for failed generations
+# If a QA pair fails validation, retry up to MAX_RETRIES times
+# Prevents losing data due to transient API issues
+
+RETRY_DELAY: 2
+# Delay in seconds between retry attempts
+# Helps avoid rate limiting when retrying failed requests
+
+# Filtering options
+FILTER_DUPLICATES: true
+# Remove duplicate or near-duplicate QA pairs
+# Important for preventing dataset contamination
+
+MIN_UNIQUE_SCORE: 0.85
+# Similarity threshold for duplicate detection (0.0-1.0)
+# Lower values (0.7-0.8) are more aggressive at removing duplicates
+# Higher values (0.9-0.95) only remove very similar pairs
+# 0.85 is a good balance for policy documents
+
+# -----------------------------------------------------------------------------
+# OUTPUT FORMAT
+# -----------------------------------------------------------------------------
+# Configure the format and structure of generated QA pairs
+
+OUTPUT_FORMAT: jsonl
+# Output format: 'jsonl' (JSON Lines) is standard for fine-tuning
+# Each line is a separate JSON object with question/answer pair
+
+INCLUDE_METADATA: true
+# Include source document metadata in each QA pair
+# Metadata includes: source file, chunk index, page numbers, timestamps
+# Essential for traceability and quality assurance
+
+METADATA_FIELDS:
+  - source_file
+  - chunk_index
+  - page_number
+  - generated_at
+  - model_name
+  - config_version
+# List of metadata fields to include in each QA pair
+# Add or remove fields based on your tracking needs
+
+# Output file naming
+OUTPUT_FILENAME_PATTERN: "medicaid_qa_{timestamp}_{run_id}.jsonl"
+# Pattern for output filenames
+# {timestamp} is replaced with generation timestamp
+# {run_id} is replaced with unique run identifier
+# Example: medicaid_qa_20240115_143022_run001.jsonl
+
+# -----------------------------------------------------------------------------
+# PROMPT CUSTOMIZATION
+# -----------------------------------------------------------------------------
+# Customize prompts for Medicaid policy document generation
+# If not specified, Augmentoolkit uses default prompts from DEFAULT_PROMPT_PATH
+
+SYSTEM_PROMPT: |
+  You are an expert policy analyst specializing in Medicaid documentation.
+  Your task is to generate high-quality question-answer pairs from Medicaid
+  policy text that will be used to fine-tune language models.
+  
+  Guidelines:
+  - Generate factual, accurate questions and answers based solely on the provided text
+  - Questions should be clear, specific, and answerable from the text
+  - Answers should be comprehensive, cite relevant sections when possible
+  - Focus on policy details, eligibility criteria, coverage information, and procedures
+  - Avoid questions that require information not present in the source text
+
+USER_TEMPLATE: |
+  Below is a section from a Medicaid policy document. Generate {num_questions} 
+  high-quality question-answer pairs from this text.
+  
+  Text section:
+  {chunk}
+  
+  Output format (JSON array):
+  [
+    {{
+      "question": "Clear, specific question about the policy",
+      "answer": "Comprehensive answer based on the text, citing relevant details",
+      "context": "Brief context or section reference if applicable"
+    }}
+  ]
+  
+  Generate exactly {num_questions} question-answer pairs. Ensure each question
+  is distinct and each answer is accurate and grounded in the provided text.
+
+# -----------------------------------------------------------------------------
+# LOGGING AND MONITORING
+# -----------------------------------------------------------------------------
+
+LOG_LEVEL: INFO
+# Logging verbosity: DEBUG, INFO, WARNING, ERROR
+# DEBUG: Detailed logs for troubleshooting
+# INFO: Standard operational logs (recommended for production)
+# WARNING: Only warnings and errors
+# ERROR: Only errors
+
+LOG_DIR: /workspace/output/logs
+# Directory for log files
+# Separate from output to keep logs organized
+
+SAVE_INTERMEDIATE_RESULTS: true
+# Save intermediate results periodically during processing
+# Helps recover from failures and monitor progress
+# Results saved to: OUTPUT_FOLDER/intermediate/
+
+INTERMEDIATE_SAVE_INTERVAL: 100
+# Save intermediate results every N chunks processed
+# Lower values (50-100) provide more frequent checkpoints
+# Higher values (500-1000) reduce I/O overhead
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE TUNING
+# -----------------------------------------------------------------------------
+# Advanced settings for optimizing performance and resource usage
+
+# API connection settings
+API_TIMEOUT: 60
+# Timeout in seconds for API requests
+# Increase if you experience timeout errors with long generations
+
+API_MAX_RETRIES: 3
+# Maximum retries for API connection failures
+# Separate from validation retries - this handles network/API errors
+
+# Resource management
+MAX_CONCURRENT_REQUESTS: 8
+# Maximum number of concurrent API requests
+# Adjust based on API rate limits and available compute
+# Start conservative and increase if API can handle more
+
+RATE_LIMIT_DELAY: 0.1
+# Delay in seconds between API requests (if needed)
+# Set to 0 if API has no rate limits or handles concurrency well
+# Increase if you encounter rate limiting errors
+
+# Memory management
+CLEAR_CACHE_INTERVAL: 500
+# Clear internal caches every N chunks processed
+# Helps manage memory usage during long runs
+# Set to 0 to disable cache clearing
+
+# -----------------------------------------------------------------------------
+# DATASET-SPECIFIC SETTINGS
+# -----------------------------------------------------------------------------
+# Settings specific to Medicaid policy document processing
+
+DOMAIN: medicaid_policy
+# Domain identifier for tracking and filtering
+# Useful when combining multiple datasets
+
+VERSION: 1.0
+# Configuration version for tracking and reproducibility
+# Increment when making significant changes
+
+DESCRIPTION: |
+  Configuration for generating QA pairs from Medicaid policy documents.
+  Optimized for dense policy text with factual, procedural, and eligibility
+  information. Designed for fine-tuning language models on healthcare policy
+  documentation.
+
+# Content filtering (optional)
+FILTER_SECTIONS:
+  - table_of_contents
+  - headers_footers
+  - page_numbers
+# List of content types to filter out before processing
+# Helps focus on substantive policy content
+
+# -----------------------------------------------------------------------------
+# NOTES FOR USERS
+# -----------------------------------------------------------------------------
+#
+# ADJUSTABLE PARAMETERS (users may want to modify):
+#   - CHUNK_SIZE: Increase for longer context, decrease for more granular chunks
+#   - NUM_QUESTIONS_PER_CHUNK: Adjust based on quality vs. quantity needs
+#   - TEMPERATURE: Increase for more diverse questions, decrease for more focused
+#   - PARALLEL_WORKERS: Adjust based on API rate limits and compute resources
+#   - MAX_ANSWER_LENGTH: Adjust based on expected answer complexity
+#
+# BEFORE RUNNING:
+#   1. Ensure LLAMA_API_KEY environment variable is set
+#   2. Verify INPUT_FOLDER contains converted markdown files
+#   3. Ensure OUTPUT_FOLDER is writable
+#   4. Test with a small subset before full production run
+#
+# MONITORING:
+#   - Check logs in LOG_DIR for progress and errors
+#   - Monitor intermediate results in OUTPUT_FOLDER/intermediate/
+#   - Review sample outputs before committing to full run
+#
+# TROUBLESHOOTING:
+#   - If API errors occur, reduce PARALLEL_WORKERS and MAX_CONCURRENT_REQUESTS
+#   - If quality is low, increase TEMPERATURE slightly or adjust prompts
+#   - If memory issues occur, reduce BATCH_SIZE or CLEAR_CACHE_INTERVAL
+#   - See docs/troubleshooting.md for detailed troubleshooting guide
