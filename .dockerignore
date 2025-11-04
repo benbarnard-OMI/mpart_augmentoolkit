@@ -1,0 +1,83 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+ENV/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation build artifacts
+docs/_build/
+docs/.doctrees/
+
+# Data directories (exclude from build context - mount as volumes)
+data/raw/
+data/processed/
+data/output/
+*.pdf
+*.md
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Docker files (don't copy Dockerfile into itself)
+Dockerfile*
+.dockerignore
+
+# Large files and archives
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+
+# Slurm job outputs
+*.out
+*.err
+slurm-*.out
+
+# Environment and secrets
+.env
+.env.local
+*.key
+*.pem
+secrets/
+
+# Build artifacts and compiled files
+*.o
+*.a
+*.lib
+*.dll
+*.exe
