@@ -1,0 +1,55 @@
+# Augmentoolkit configuration for Medicaid QA dataset generation.
+#
+# Duplicate and adjust this file for local vs. cluster runs as needed:
+#   - configs/augmentoolkit_config.local.yaml
+#   - configs/augmentoolkit_config.cluster.yaml
+
+run:
+  run_id_prefix: medicaid-qa
+  output_dir: data/output
+  resume_on_failure: true
+
+data:
+  input_manifest: data/processed/manifests/sample.list  # Update in production
+  chunk_size: 2000
+  overlap: 200
+  metadata:
+    source: medicaid_policies
+    version: draft
+
+model:
+  provider: vllm
+  model_name: meta-llama/Llama-3.1-70B-Instruct
+  gpu_memory_utilization: 0.9
+  tensor_parallel_size: 1
+  temperature: 0.2
+  max_tokens: 2048
+
+prompting:
+  system_prompt: |
+    You are a policy analysis assistant. Generate factual QA pairs grounded in Medicaid documentation.
+    Cite the relevant sections in the answer when possible.
+  user_template: |
+    Source chunk:
+    {{chunk}}
+
+    Required output format (JSON):
+    [
+      {
+        "question": "...",
+        "answer": "...",
+        "evidence": ["page x", "section y"]
+      }
+    ]
+
+postprocessing:
+  validation:
+    max_answer_length: 1500
+    reject_if_no_evidence: true
+  export:
+    format: jsonl
+    include_metadata: true
+
+logging:
+  level: INFO
+  log_dir: data/output/logs
