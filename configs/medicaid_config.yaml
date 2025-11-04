@@ -1,0 +1,115 @@
+# Medicaid Policy Question-Answer Generation Pipeline
+# ---------------------------------------------------
+# This configuration drives Augmentoolkit to convert the processed Medicaid
+# policy corpus into high-quality question-answer examples ready for
+# fine-tuning. It follows the structure of the reference datagen template but
+# has been tailored for our production Docker environment.
+
+pipeline: medicaid-policy-datagen  # Identifier shown in logs; adjust if running multiple pipelines in parallel.
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+  # Absolute path to the Markdown files produced by the preprocessing stage.
+  # The Docker container mounts the converted Medicaid policies here.
+  input_dirs:
+    - path: /workspace/data/processed
+      recursive: true            # Traverse subdirectories to pick up nested manifests (keeps manifests aligned with source PDFs).
+      file_glob: "**/*.md"        # Restrict ingestion to Markdown files; change if another format is emitted.
+      source_metadata:
+        include_file_name: true  # Attach the filename to every generated example for downstream filtering.
+        include_relative_path: true  # Preserve subdirectory context (e.g., state/year) in metadata payloads.
+        include_checksum: false  # Enable if you need integrity checks; off by default to save time.
+  # Directory for all intermediate artifacts (chunk cache, validation reports, failure logs).
+  cache_dir: /workspace/output/cache
+  # Directory where final JSONL files and run reports will be written.
+  output_dir: /workspace/output
+  # Location of the shipped prompt templates inside the Augmentoolkit repo.
+  default_prompt_path: /workspace/augmentoolkit/prompts
+
+# -----------------------------------------------------------------------------
+# Model Config
+# -----------------------------------------------------------------------------
+model:
+  name: meta-llama/Llama-3.1-70B-Instruct   # Core generator for QA pairs; swap if experimenting with alternative providers.
+  mode: api                                # This pipeline reaches the model over an HTTP API (vLLM or compatible server).
+  completion_mode: true                    # Use completion-style prompts; aligns with vLLM completion endpoints.
+  api_key: ${LLAMA_API_KEY}                # Injected at runtime; export in your environment or docker-compose secrets.
+  api_base_url: ${LLAMA_API_BASE_URL:-http://localhost:8000/v1}  # Override when targeting a remote inference cluster.
+  request_timeout_seconds: 120             # Generous timeout for dense 70B completions; decrease if the server enforces shorter limits.
+  max_output_tokens: 1024                  # Cap answer length; raise cautiously to avoid runaway token usage.
+  temperature: 0.1                         # Low randomness keeps answers faithful to policy text.
+  top_p: 0.9                               # Narrow nucleus sampling; adjust with temperature for more diverse outputs.
+  frequency_penalty: 0.0                   # Leave penalties off unless repetition becomes an issue.
+  presence_penalty: 0.0
+  parallel_requests: 4                     # Controls client-side concurrency; tune to match server throughput.
+  retry:
+    max_attempts: 3                        # Retry failed completions to ride out transient API hiccups.
+    backoff_seconds: 10                    # Linear backoff between retries; expand for noisier endpoints.
+
+# -----------------------------------------------------------------------------
+# Processing
+# -----------------------------------------------------------------------------
+processing:
+  chunk_size: 1500                         # Target characters per chunk; tuned for dense Medicaid policy sections.
+  chunk_overlap: 100                       # Shared tokens between adjacent chunks to keep context continuity.
+  min_chunk_size: 500                      # Discard extremely short fragments that seldom yield meaningful questions.
+  max_chunk_size: 2000                     # Hard ceiling to prevent runaway chunks when headings are missing.
+  chunk_joiner: "\n\n"                     # Separator inserted when concatenating partial paragraphs.
+  num_questions_per_chunk: 5               # Generate five QA sets per chunk to balance coverage and quality.
+  max_questions_per_document: 120          # Safety guardrail per document; set null to remove.
+  max_documents: null                      # Allows processing of all inputs; restrict for dry runs or smoke tests.
+  shuffle_documents: true                  # Randomize document order to spread load evenly across states and years.
+  concurrency_limit: 24                    # Worker threads for chunking + generation; match to CPU core availability.
+  resume_from_checkpoint: true             # Resume partially completed runs using state in `cache_dir`.
+
+# -----------------------------------------------------------------------------
+# Quality Control
+# -----------------------------------------------------------------------------
+quality_control:
+  check_text: true                         # Validate extracted text (e.g., minimum length, script detection).
+  check_question: true                     # Filter malformed questions (missing interrogatives, etc.).
+  check_answer: true                       # Ensure answers cite source context and meet length guidelines.
+  validation_retry_limit: 3                # Re-run validation/generation cycle up to three times before giving up on a chunk.
+  repair_retry_limit: 2                    # Number of attempts to auto-repair invalid QA pairs before dropping them.
+  drop_failed_records: true                # Exclude records that still fail after retries to maintain dataset integrity.
+  guardrail_model:
+    name: meta-llama/Llama-3.1-8B-Instruct  # Lightweight reviewer to cross-check question/answer fidelity.
+    mode: api                               # Uses the same API stack; adjust if you dedicate a different service.
+    api_key: ${LLAMA_API_KEY}               # Reuse base credential via environment variable.
+    completion_mode: true                   # Keep the guardrail prompt format consistent with the main generator.
+    temperature: 0.0                        # Deterministic critiques improve reproducibility across runs.
+    max_output_tokens: 512                  # Guardrail responses are short; reduce if API limits are tighter.
+    request_timeout_seconds: 60             # Guardrail calls are faster; shorter timeout keeps the pipeline responsive.
+    retry:
+      max_attempts: 2                       # Guardrail calls are cheaper; two retries balance speed and resilience.
+      backoff_seconds: 5
+  lexical_similarity_threshold: 0.35        # Prevent near-duplicate questions within the same document.
+  answer_citation_requirement: strict       # Require policy references in every answer (fail validation otherwise).
+  allow_cross_document_context: false       # Keeps QA pairs grounded in a single source document for traceability.
+
+# -----------------------------------------------------------------------------
+# Output
+# -----------------------------------------------------------------------------
+output:
+  format: jsonl                            # Fine-tuning pipeline expects JSON Lines.
+  file_prefix: medicaid_policy_qa          # Prefix for emitted shards (e.g., medicaid_policy_qa-00001.jsonl).
+  records_per_file: 2000                   # Split shards for easier reprocessing; tweak based on downstream tooling.
+  include_metadata: true                   # Attach source metadata alongside question/answer pairs.
+  metadata_fields:
+    - source_file                          # Relative path to the originating markdown file.
+    - chunk_index                          # Zero-based index of the chunk inside the source document.
+    - char_start                           # Character offset where the chunk begins.
+    - char_end                             # Character offset where the chunk ends.
+    - original_pdf                         # Original PDF filename for traceability back to raw data.
+    - policy_topic                         # Optional topic tag pulled from manifest; empty when unavailable.
+  write_interval: 100                      # Flush partial results every 100 records to guard against job restarts.
+  save_failed_records: true                # Persist failures under `output_dir/failed/` for manual review.
+  emit_generation_prompts: false           # Suppress prompt text in output unless debugging prompt templates.
+  compression: none                        # Set to "gzip" if storage space becomes a concern.
+  dataset_manifest:
+    write: true                            # Produce a summary manifest (counts, hashes) alongside JSONL shards.
+    path: medicaid_manifest.json           # File name relative to `output_dir`.
+    include_run_config: true               # Embed a copy of this configuration for provenance tracking.
+
