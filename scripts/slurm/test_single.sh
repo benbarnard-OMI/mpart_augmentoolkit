@@ -27,7 +27,7 @@ echo "[$(date -Iseconds)] Starting single PDF QA generation for ${PDF_PATH}"
 apptainer exec --nv \
     "${CONTAINER_IMAGE}" \
     augmentoolkit run \
-      --config /workspace/configs/augmentoolkit_config.yaml \
+      --config /workspace/configs/medicaid_config.yaml \
       --input "${PDF_PATH}" \
       --output "${OUTPUT_DIR}" \
       --run-id "${RUN_ID}" \

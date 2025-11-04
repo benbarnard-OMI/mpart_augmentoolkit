@@ -1,4 +1,9 @@
-# Medicaid QA Dataset Generation
+# MPART Augmentoolkit: Medicaid QA Dataset Generation
+
+![Project Status](https://img.shields.io/badge/status-development-yellow)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Python](https://img.shields.io/badge/python-3.10+-blue)
+![CUDA](https://img.shields.io/badge/CUDA-12.1-green)
 
 > **Last Updated**: 2025-11-04
 
@@ -75,8 +80,8 @@ Get up and running in 5 minutes:
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-org/medicaid-qa-generation.git
-cd medicaid-qa-generation
+git clone https://github.com/benbarnard-OMI/mpart_augmentoolkit.git
+cd mpart_augmentoolkit
 ```
 
 ### 2. Build Docker Image
@@ -98,29 +103,66 @@ docker run --gpus all \
   python /workspace/scripts/test_environment.py
 ```
 
-### 5. Process Sample PDFs
+### 5. Prepare Sample Data
 ```bash
-# Convert a few sample PDFs to markdown (adjust paths as needed)
+# Place 2-3 small test PDFs in data/sample_source/
+# Then convert them to markdown
 docker run --gpus all \
-  -v $(pwd)/data:/workspace/data \
+  -v $(pwd)/data/sample_source:/workspace/data/raw \
+  -v $(pwd)/data/processed:/workspace/data/processed \
   mpart-augmentoolkit:v1 \
   python /workspace/scripts/preprocessing/convert_pdfs.py \
-  --input-dir /workspace/data/raw \
-  --output-dir /workspace/data/processed/sample \
-  --limit 5
+    --input-dir /workspace/data/raw \
+    --output-dir /workspace/data/processed
 ```
 
-⚠️ **Important**: For production runs, you'll need a running vLLM server with Llama 3.1 70B. See [docs/setup.md](docs/setup.md) for detailed setup instructions.
+### 6. Run Local Test with Augmentoolkit
+```bash
+# Start vLLM server (in separate terminal or background)
+# See docs/setup.md for detailed vLLM setup instructions
 
-💡 **Tip**: Start with 5-10 sample PDFs locally before scaling to the full 1,100 PDF dataset on the cluster.
+# Run Augmentoolkit on your sample data
+docker run --gpus all \
+  -v $(pwd)/data/processed:/workspace/data \
+  -v $(pwd)/output:/workspace/output \
+  -e LLAMA_API_KEY=your_key_here \
+  mpart-augmentoolkit:v1 \
+  python /workspace/augmentoolkit/processing.py \
+    --config /workspace/configs/medicaid_config.yaml
+
+# Check output
+ls -lh output/
+```
+
+⚠️ **Note**: Production runs require a vLLM server. See `docs/setup.md` for complete local development setup including vLLM configuration.
+
+💡 **Tip**: Start with 2-3 sample PDFs locally before scaling to the full 1,100 PDF dataset on the cluster.
+
+### Docker Compose (Optional)
+
+For easier local development with vLLM:
+
+```bash
+# Start vLLM server
+docker-compose up -d vllm
+
+# Wait for model to load (check logs)
+docker-compose logs -f vllm
+
+# Run Augmentoolkit
+docker-compose run augmentoolkit \
+  python /workspace/augmentoolkit/processing.py \
+  --config /workspace/configs/medicaid_config.yaml
+```
+
+See `docker-compose.yml` for configuration details.
 
 ## Project Structure
 
 ```
-medicaid-qa-generation/
+mpart_augmentoolkit/
 ├── configs/                        # Configuration files
-│   ├── augmentoolkit_config.yaml  # Main Augmentoolkit configuration (deprecated)
-│   └── medicaid_config.yaml       # Medicaid-specific QA generation config (USE THIS)
+│   └── medicaid_config.yaml       # Medicaid-specific QA generation config
 │
 ├── data/                          # Data storage (gitignored)
 │   ├── raw/                       # Original 1,100 Medicaid policy PDFs
@@ -250,7 +292,7 @@ Comprehensive documentation for every aspect of the project:
 ### Phase 1 - Local Development and Testing (Weeks 1-2)
 - Containerize environment (`Dockerfile`, `requirements.txt`).
 - Convert 10-20 sample PDFs via `scripts/preprocessing/convert_pdfs.py`.
-- Validate pipeline with `_LOCAL_DATAGEN_complete_factual.yaml` against 5 PDFs.
+- Validate pipeline with `medicaid_config.yaml` against 5 PDFs.
 - Benchmark 20 PDFs locally and log metrics in `docs/benchmarks.md`.
 - **Deliverables**: Local Docker image, baseline benchmarks, sampled QA outputs, updated configs.
 

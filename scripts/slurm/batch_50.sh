@@ -28,7 +28,7 @@ echo "Manifest: ${MANIFEST}"
 apptainer exec --nv \
     "${CONTAINER_IMAGE}" \
     augmentoolkit run \
-      --config /workspace/configs/augmentoolkit_config.yaml \
+      --config /workspace/configs/medicaid_config.yaml \
       --manifest "${MANIFEST}" \
       --output "${OUTPUT_DIR}" \
       --run-id "${RUN_ID}" \

@@ -85,8 +85,8 @@ sudo systemctl restart docker
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-org/medicaid-qa-generation.git
-cd medicaid-qa-generation
+git clone https://github.com/benbarnard-OMI/mpart_augmentoolkit.git
+cd mpart_augmentoolkit
 ```
 
 ### 2. Create Data Directories
@@ -191,37 +191,118 @@ docker run --gpus all mpart-augmentoolkit:v1 python3 -c "import torch; [print(f'
 
 To run Augmentoolkit, you need an inference endpoint. We recommend vLLM for efficient serving of Llama 3.1 70B.
 
-### Option 1: Local vLLM Server (Requires 40GB+ VRAM)
+### Prerequisites for vLLM
 
-#### Install vLLM in a separate terminal:
+Before setting up vLLM, ensure you have:
+- Python 3.8-3.11 (Python 3.10 recommended)
+- CUDA 12.1+ installed and configured
+- Sufficient GPU memory (see model requirements below)
+- Hugging Face account with Llama 3.1 access
+
+### Model Requirements
+
+| Model | GPU Memory | Disk Space | Recommended Hardware |
+|-------|-----------|------------|---------------------|
+| Llama 3.1 8B | ~16GB | ~16GB | Single RTX 3090/4090 |
+| Llama 3.1 70B | ~140GB | ~150GB | 2x A100 80GB or 4x RTX 3090 with tensor parallelism |
+
+### Option 1: Local vLLM Installation
+
+#### Step 1: Install vLLM
+
+Create a separate Python environment for vLLM:
 ```bash
+# Create virtual environment
+python3 -m venv vllm-env
+source vllm-env/bin/activate
+
+# Install vLLM with CUDA support
 pip install vllm
+
+# Verify installation
+python -c "import vllm; print(vllm.__version__)"
 ```
 
-#### Start vLLM server with Llama 3.1 70B:
+#### Step 2: Download Llama 3.1 Model
+
+First, ensure you have access to Llama 3.1 on Hugging Face:
+1. Visit https://huggingface.co/meta-llama/Meta-Llama-3.1-70B-Instruct
+2. Request access (requires accepting Meta's license)
+3. Generate a Hugging Face access token at https://huggingface.co/settings/tokens
+
+Then authenticate:
 ```bash
+pip install huggingface-hub
+huggingface-cli login
+# Paste your token when prompted
+```
+
+Pre-download the model (optional but recommended):
+```bash
+# For Llama 3.1 70B (requires ~150GB disk space)
+huggingface-cli download meta-llama/Meta-Llama-3.1-70B-Instruct
+
+# For Llama 3.1 8B (for testing, requires ~16GB disk space)
+huggingface-cli download meta-llama/Meta-Llama-3.1-8B-Instruct
+```
+
+#### Step 3: Start vLLM Server
+
+**For Llama 3.1 70B (Multi-GPU Setup):**
+```bash
+# Using 2 GPUs with tensor parallelism
 python -m vllm.entrypoints.openai.api_server \
-  --model meta-llama/Llama-3.1-70B-Instruct \
+  --model meta-llama/Meta-Llama-3.1-70B-Instruct \
   --tensor-parallel-size 2 \
   --gpu-memory-utilization 0.9 \
   --max-model-len 8192 \
-  --port 8000
+  --port 8000 \
+  --trust-remote-code
+
+# Or for 4 GPUs (RTX 3090 setup)
+python -m vllm.entrypoints.openai.api_server \
+  --model meta-llama/Meta-Llama-3.1-70B-Instruct \
+  --tensor-parallel-size 4 \
+  --gpu-memory-utilization 0.85 \
+  --max-model-len 4096 \
+  --port 8000 \
+  --trust-remote-code
 ```
 
-⚠️ **Note**: This requires ~150GB of disk space for model weights and 40GB+ GPU memory. For dual RTX 3090 (24GB each), tensor parallelism splits the model across both GPUs.
-
-#### Verify server is running:
+**For Llama 3.1 8B (Single GPU Testing):**
 ```bash
-curl http://localhost:8000/v1/models
+python -m vllm.entrypoints.openai.api_server \
+  --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+  --gpu-memory-utilization 0.7 \
+  --max-model-len 8192 \
+  --port 8000 \
+  --trust-remote-code
 ```
 
-Expected response:
+#### Step 4: Verify Server is Running
+
+Open a new terminal and test the endpoint:
+```bash
+# Check available models
+curl http://localhost:8000/v1/models
+
+# Test a simple completion
+curl http://localhost:8000/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    "prompt": "What is the capital of France?",
+    "max_tokens": 50
+  }'
+```
+
+Expected model list response:
 ```json
 {
   "object": "list",
   "data": [
     {
-      "id": "meta-llama/Llama-3.1-70B-Instruct",
+      "id": "meta-llama/Meta-Llama-3.1-70B-Instruct",
       "object": "model",
       "created": 1234567890,
       "owned_by": "vllm"
@@ -230,27 +311,163 @@ Expected response:
 }
 ```
 
-### Option 2: Remote API Endpoint
+#### Step 5: Monitor Server Logs
+
+Watch for these key log messages:
+```
+INFO:     Started server process
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+⚠️ **Important**: Model loading takes 5-10 minutes depending on your hardware. Wait for "Application startup complete" before sending requests.
+
+### Option 2: Docker-based vLLM Setup (Recommended)
+
+Using docker-compose simplifies the setup:
+
+#### Step 1: Configure docker-compose.yml
+
+The repository includes a `docker-compose.yml` file. Review and adjust:
+- `CUDA_VISIBLE_DEVICES`: Set GPU IDs (e.g., "0,1" for 2 GPUs)
+- `--tensor-parallel-size`: Match your GPU count
+- `--gpu-memory-utilization`: Adjust based on your GPU memory
+
+#### Step 2: Start vLLM Container
+
+```bash
+# Start vLLM server in the background
+docker-compose up -d vllm
+
+# Watch logs until model loads
+docker-compose logs -f vllm
+
+# You should see "Application startup complete" after 5-10 minutes
+```
+
+#### Step 3: Verify Container
+
+```bash
+# Check container status
+docker-compose ps
+
+# Test the endpoint
+curl http://localhost:8000/v1/models
+```
+
+#### Step 4: Run Augmentoolkit
+
+```bash
+# In a separate terminal
+docker-compose run augmentoolkit \
+  python /workspace/augmentoolkit/processing.py \
+  --config /workspace/configs/medicaid_config.yaml
+```
+
+### Option 3: Remote API Endpoint
 
 If you have access to a hosted vLLM endpoint or OpenAI-compatible API:
 
 ```bash
+# Set environment variables
 export LLAMA_API_KEY="your-api-key-here"
 export VLLM_BASE_URL="https://your-endpoint.com/v1"
-export LLAMA_MODEL="meta-llama/Llama-3.1-70B-Instruct"
+export LLAMA_MODEL="meta-llama/Meta-Llama-3.1-70B-Instruct"
+
+# Pass them to Docker
+docker run --gpus all \
+  -e LLAMA_API_KEY="${LLAMA_API_KEY}" \
+  -e VLLM_BASE_URL="${VLLM_BASE_URL}" \
+  -e LLAMA_MODEL="${LLAMA_MODEL}" \
+  -v $(pwd)/data:/workspace/data \
+  -v $(pwd)/configs:/workspace/configs \
+  mpart-augmentoolkit:v1 \
+  python /workspace/augmentoolkit/processing.py \
+  --config /workspace/configs/medicaid_config.yaml
 ```
 
-### Option 3: Smaller Model for Testing (Recommended for Initial Setup)
+### Option 4: Smaller Model for Testing
 
 For quick testing without 70B model requirements:
 ```bash
 python -m vllm.entrypoints.openai.api_server \
-  --model meta-llama/Llama-3.1-8B-Instruct \
+  --model meta-llama/Meta-Llama-3.1-8B-Instruct \
   --gpu-memory-utilization 0.7 \
-  --port 8000
+  --max-model-len 8192 \
+  --port 8000 \
+  --trust-remote-code
 ```
 
 This only requires ~16GB GPU memory and is perfect for validating your pipeline before scaling up.
+
+### Troubleshooting vLLM Setup
+
+#### Issue: Out of Memory (OOM) errors
+**Solution**: Reduce `--gpu-memory-utilization` to 0.7 or 0.8, or use a smaller model
+
+#### Issue: Model not found
+**Solution**: Ensure you've accepted the Llama license and authenticated with Hugging Face:
+```bash
+huggingface-cli login
+```
+
+#### Issue: Slow inference
+**Solution**: Increase `--tensor-parallel-size` or check GPU utilization:
+```bash
+watch -n 1 nvidia-smi
+```
+
+#### Issue: Connection refused
+**Solution**: Verify server is running:
+```bash
+# Check if port 8000 is listening
+netstat -tulpn | grep 8000
+
+# Or check with lsof
+lsof -i :8000
+```
+
+#### Issue: CUDA version mismatch
+**Solution**: Reinstall vLLM with correct CUDA version:
+```bash
+pip uninstall vllm
+pip install vllm --no-cache-dir
+```
+
+### Performance Tuning
+
+For optimal performance:
+
+1. **Adjust batch size**:
+```bash
+--max-num-batched-tokens 8192
+--max-num-seqs 256
+```
+
+2. **Enable KV cache**:
+```bash
+--enable-prefix-caching
+```
+
+3. **Optimize for latency**:
+```bash
+--max-num-batched-tokens 2048
+--max-num-seqs 64
+```
+
+4. **Optimize for throughput**:
+```bash
+--max-num-batched-tokens 16384
+--max-num-seqs 512
+```
+
+### Next Steps
+
+Once vLLM is running:
+1. Proceed to [Processing Sample PDFs](#processing-sample-pdfs)
+2. Configure Augmentoolkit to use your vLLM endpoint
+3. Run a small test batch to validate the pipeline
 
 ## Processing Sample PDFs
 
