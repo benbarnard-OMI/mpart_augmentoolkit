@@ -1,0 +1,2 @@
+# This directory stores SLURM job logs
+# Format: <script-name>-<job-id>.out and <script-name>-<job-id>.err
