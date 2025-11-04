@@ -1,17 +1,52 @@
 ################################################################################
-# Augmentoolkit Configuration for Medicaid Policy Dataset
+# MEDICAID QA GENERATION CONFIG
 ################################################################################
 #
-# PURPOSE: Process 1,100 Medicaid policy PDFs to generate high-quality 
-# question-answer pairs for model fine-tuning.
+# PURPOSE: Generate question-answer pairs from Medicaid policy documents
+# TARGET: 1,100 PDFs -> ~5,500+ QA pairs for fine-tuning
+# MODEL: Llama 3.1 70B via vLLM
 #
-# REFERENCE: Based on Augmentoolkit's _LOCAL_DATAGEN_complete_factual.yaml
-# https://github.com/e-p-armstrong/augmentoolkit/blob/master/external_configs/_LOCAL_DATAGEN_complete_factual.yaml
+# BEFORE RUNNING:
+# 1. Set LLAMA_API_KEY environment variable (or configure vLLM endpoint)
+# 2. Ensure vLLM server is running at BASE_URL or update to your endpoint
+# 3. Convert PDFs to markdown in INPUT_FOLDER using Docling
+# 4. Verify OUTPUT_FOLDER has write permissions
+# 5. Review chunk size and question count settings below
 #
-# USAGE: This config is designed for Docker container execution with:
+# AUGMENTOOLKIT VERSION: Compatible with 2.x and 3.0
+# PIPELINE: Factual QA generation with validation
+# EXPECTED RUNTIME: ~40-60 GPU-hours for full dataset (1,100 PDFs on A100 80GB)
+#
+# CONFIGURATION REFERENCE:
+# Based on Augmentoolkit's _LOCAL_DATAGEN_complete_factual.yaml
+# https://github.com/e-p-armstrong/augmentoolkit
+#
+# DOCKER/APPTAINER PATHS:
 #   - Data mounted at: /workspace/data
 #   - Augmentoolkit at: /workspace/augmentoolkit
 #   - Output to: /workspace/output
+#
+# KEY PARAMETERS TO ADJUST:
+#   - system.number_of_factual_sft_generations_to_do: QA pairs per chunk (default: 5)
+#   - system.chunk_size: Text chunk size in characters (default: 1500)
+#   - system.concurrency_limit: Parallel requests (adjust for GPU/API limits)
+#   - system.use_subset: Set True for testing, False for production
+#   - path.input_dirs[0].variation_generation_counts: Variations per QA pair (default: 4)
+#
+# TESTING VS PRODUCTION:
+#   Testing:  Set system.use_subset=True, system.subset_size=30
+#   Production: Set system.use_subset=False, increase concurrency_limit
+#
+# COST TRACKING:
+#   Cost rates configured for reference only (lines 72-75, 90-93, etc.)
+#   Update to match your actual provider's rates
+#
+################################################################################
+# Augmentoolkit Configuration for Medicaid Policy Dataset
+################################################################################
+#
+# ORIGINAL PURPOSE: Process 1,100 Medicaid policy PDFs to generate high-quality 
+# question-answer pairs for model fine-tuning.
 #
 ################################################################################
 
