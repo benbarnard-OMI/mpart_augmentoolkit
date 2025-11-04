@@ -4,6 +4,13 @@
 
 Generate a high-quality question-answer dataset from roughly 1,100 Medicaid policy PDFs using Augmentoolkit and the UIUC Campus Cluster. This repository centralizes the project plan, benchmarking docs, job scripts, and environment configuration so the pipeline is reproducible from local prototyping through full production runs.
 
+## Project Status
+
+- 🟡 **Phase**: Local Development & Testing
+- 📊 **PDFs Processed**: 0 / 1,100
+- ⚡ **GPU Hours Used**: 0 / 1,000
+- 🎯 **Next Milestone**: Docker build and local validation
+
 ## Quick Facts
 
 - **Goal**: Produce production-ready QA pairs suitable for fine-tuning LLMs while staying within a 1,000 GPU-hour allocation
